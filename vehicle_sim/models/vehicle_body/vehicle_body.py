@@ -33,17 +33,12 @@ class VehicleBodyState:
     pitch_rate: float = 0.0  # 피치 속도 [rad/s]
     yaw_rate: float = 0.0    # 요 속도 [rad/s]
 
-    # 이전 스텝 가속도 (관성 모멘트 계산용)
-    ax_prev: float = 0.0     # 이전 종방향 가속도 [m/s²]
-    ay_prev: float = 0.0     # 이전 횡방향 가속도 [m/s²]
-
 
 @dataclass
 class VehicleBodyParameters:
     """차체 물리 파라미터"""
     # 질량
     m: float = 1500.0           # 스프렁 질량 [kg]
-    m_total: float = 1500.0     # 전체 차량 질량 (스프렁 + 언스프렁) [kg]
 
     # 관성 모멘트 (CG 기준)
     Ixx: float = 500.0          # 롤 관성 모멘트 [kg·m²]
@@ -82,62 +77,25 @@ class VehicleBody:
             vehicle_spec = load_param('vehicle_spec', config_path)
             physics_param = load_param('physics', config_path)
             susp_param = load_param('suspension', config_path)
-            unsprung_param = load_param('unsprung', config_path)
 
             geometry = vehicle_spec.get('geometry', {})
             inertia = vehicle_body.get('inertia', {})
 
-            # corner_offsets 로드 (CG 기준 각 코너 위치)
-            corner_offsets = geometry.get('corner_offsets', {})
-
-            # a, b (CG→전축/후축 거리) - front는 양수, rear는 양수 크기로 저장
-            front_x = float(corner_offsets.get('FL', {}).get('x', 1.155))
-            rear_x = float(corner_offsets.get('RL', {}).get('x', -1.815))
-            a = abs(front_x)  # CG → 전축 거리
-            b = abs(rear_x)   # CG → 후축 거리
-
-            # 언스프렁 질량 로드 및 전체 질량 계산
-            m_sprung = float(vehicle_body.get('m', 1500.0))
-            m_u_front = float(unsprung_param.get('m_u_front', 69.12))
-            m_u_rear = float(unsprung_param.get('m_u_rear', 54.995))
-            m_unsprung_total = 2 * m_u_front + 2 * m_u_rear  # 4바퀴 전체
-            m_total = m_sprung + m_unsprung_total
-
             self.params = VehicleBodyParameters(
-                m=m_sprung,
-                m_total=m_total,
+                m=float(vehicle_body.get('m', 1500.0)),
                 Ixx=float(inertia.get('Ixx', 500.0)),
                 Iyy=float(inertia.get('Iyy', 2500.0)),
                 Izz=float(inertia.get('Izz', 2800.0)),
                 Ixz=float(inertia.get('Ixz', 0.0)),
                 h_CG=float(susp_param.get('z_CG0', 0.5)),
-                a=a,
-                b=b,
+                a=float(geometry.get('a', 1.4)),
+                b=float(geometry.get('b', 1.4)),
                 L_track=float(geometry.get('L_track', 1.6)),
                 L_wheelbase=float(geometry.get('L_wheelbase', 2.8)),
                 g=float(physics_param.get('g', 9.81))
             )
-
-            # corner_offsets 저장 (실제 코너 위치 계산에 사용)
-            self.corner_offsets = {
-                "FL": {"x": float(corner_offsets.get('FL', {}).get('x', 1.155)),
-                       "y": float(corner_offsets.get('FL', {}).get('y', 0.817))},
-                "FR": {"x": float(corner_offsets.get('FR', {}).get('x', 1.155)),
-                       "y": float(corner_offsets.get('FR', {}).get('y', -0.817))},
-                "RL": {"x": float(corner_offsets.get('RL', {}).get('x', -1.815)),
-                       "y": float(corner_offsets.get('RL', {}).get('y', 0.817))},
-                "RR": {"x": float(corner_offsets.get('RR', {}).get('x', -1.815)),
-                       "y": float(corner_offsets.get('RR', {}).get('y', -0.817))}
-            }
         else:
             self.params = parameters
-            # 파라미터로 초기화할 경우 corner_offsets 계산
-            self.corner_offsets = {
-                "FL": {"x": parameters.b, "y": parameters.L_track / 2.0},
-                "FR": {"x": parameters.b, "y": -parameters.L_track / 2.0},
-                "RL": {"x": -parameters.a, "y": parameters.L_track / 2.0},
-                "RR": {"x": -parameters.a, "y": -parameters.L_track / 2.0}
-            }
 
         self.state = VehicleBodyState()
         self.wheel_labels: List[str] = ["FL", "FR", "RR", "RL"]  # 4개 바퀴 고정
@@ -146,6 +104,13 @@ class VehicleBody:
         }
 
         # 코너별 부호 정의 (서스펜션 모델과 동일)
+        self.corner_signs = {
+            "FL": {"roll": 1, "pitch": 1},    # Left (+), Front (+)
+            "FR": {"roll": -1, "pitch": 1},   # Right (-), Front (+)
+            "RL": {"roll": 1, "pitch": -1},   # Left (+), Rear (-)
+            "RR": {"roll": -1, "pitch": -1}   # Right (-), Rear (-)
+        }
+
     def _rotation_matrix(self) -> np.ndarray:
         """바디→관성 회전 행렬 (ZYX Euler)"""
         phi, theta, psi = self.state.roll, self.state.pitch, self.state.yaw
@@ -223,12 +188,8 @@ class VehicleBody:
             )
             corner_outputs[label] = (F_s, F_x, F_y)
 
-        # 3. 코너 힘 합산 (이전 스텝 가속도를 이용한 관성 모멘트 포함)
-        forces, moments = self.assemble_forces_moments(
-            corner_outputs,
-            ax=self.state.ax_prev,
-            ay=self.state.ay_prev
-        )
+        # 3. 코너 힘 합산
+        forces, moments = self.assemble_forces_moments(corner_outputs)
 
         # 4. 차체 동역학 업데이트
         self._update_dynamics(dt, forces, moments)
@@ -243,10 +204,6 @@ class VehicleBody:
         """
         # 1. 가속도 계산
         linear_acc, angular_acc = self.calculate_accelerations(forces, moments)
-
-        # 다음 스텝을 위해 현재 가속도 저장
-        self.state.ax_prev = float(linear_acc[0])
-        self.state.ay_prev = float(linear_acc[1])
 
         # 2. 바디 좌표계 속도 적분
         self.state.velocity_x += linear_acc[0] * dt
@@ -291,15 +248,12 @@ class VehicleBody:
         self.state.heave += v_inertial[2] * dt  # heave는 관성계 z 성분으로 적분
 
     def calculate_accelerations(self, forces: np.ndarray,
-                                moments: np.ndarray,
-                                add_gravity=True) -> Tuple[np.ndarray, np.ndarray]:
+                                moments: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """선형 및 각 가속도 계산 (Newton-Euler 방정식)
 
         Args:
             forces: 차체에 작용하는 총 힘 [Fx, Fy, Fz] (바디 좌표계) [N]
             moments: 차체에 작용하는 총 모멘트 [Mx, My, Mz] (바디 좌표계) [N·m]
-            add_gravity: True이면 중력(-m*g)을 바디 좌표계로 변환해 forces에 더함
-                         (이미 입력 forces에 중력항이 포함돼 있으면 False로 설정)
 
         Returns:
             linear_acc: 선형 가속도 [ax, ay, az] (바디 좌표계) [m/s²]
@@ -312,23 +266,17 @@ class VehicleBody:
         omega = np.array([self.state.roll_rate, self.state.pitch_rate, self.state.yaw_rate])
         v = np.array([self.state.velocity_x, self.state.velocity_y, self.state.heave_dot])
 
-        # 1. 선형 가속도 (중력 포함 여부 선택)
-        F_total = forces.copy()
-        if add_gravity:
-            R = self._rotation_matrix()
-            # 중력은 스프렁 질량에만 작용 (언스프렁은 서스펜션에서 별도 처리)
-            F_gravity_inertial = np.array([0.0, 0.0, -self.params.m * self.params.g])
-            F_gravity_body = R.T @ F_gravity_inertial
-            F_total = F_total + F_gravity_body
+        # 1. 선형 가속도 (중력 포함)
+        # 중력을 바디 좌표계로 변환 (간단히 z 방향만 고려, 소각 가정)
+        # 정확한 변환은 회전 행렬 필요하지만, 일단 간단히 처리
+        # 중력: 관성계 -> 바디계 변환
+        R = self._rotation_matrix()
+        F_gravity_inertial = np.array([0.0, 0.0, -self.params.m * self.params.g])
+        F_gravity_body = R.T @ F_gravity_inertial
 
         # Coriolis/centrifugal force 보정
-        # IMPORTANT: F_total은 4개 코너 힘의 총합이므로 전체 질량 사용
-        coriolis_term = np.cross(omega, v)
-        linear_acc = np.array([
-            F_total[0] / self.params.m_total - coriolis_term[0],  # ax: 전체 질량
-            F_total[1] / self.params.m_total - coriolis_term[1],  # ay: 전체 질량
-            F_total[2] / self.params.m - coriolis_term[2]   # az: 전체 질량 (수정!)
-        ])
+        F_total = forces + F_gravity_body
+        linear_acc = F_total / self.params.m - np.cross(omega, v)
 
         # 2. 각 가속도
         # 관성 텐서 (대각 + Ixz)
@@ -359,10 +307,12 @@ class VehicleBody:
             position: 휠 중심의 위치 [X, Y, Z] (관성 좌표계) [m]
         """
         label = self.wheel_labels[wheel_idx]
+        signs = self.corner_signs[label]
 
-        # corner_offsets에서 직접 x, y 값 사용
-        x_i = self.corner_offsets[label]["x"]
-        y_i = self.corner_offsets[label]["y"]
+        # 휠 위치 벡터 (CG 기준, 바디 좌표계)
+        # x_i = (L_wheelbase/2) * sign_pitch, y_i = (L_track/2) * sign_roll
+        x_i = (self.params.L_wheelbase / 2.0) * signs["pitch"]
+        y_i = (self.params.L_track / 2.0) * signs["roll"]
         r_body = np.array([x_i, y_i, -self.params.h_CG])
 
         # 회전 행렬 (바디 → 관성 좌표계, ZYX Euler 각 사용)
@@ -387,10 +337,12 @@ class VehicleBody:
             velocity: 휠 중심 속도 [vx, vy, vz] (요청한 좌표계) [m/s]
         """
         label = self.wheel_labels[wheel_idx]
+        signs = self.corner_signs[label]
 
-        # corner_offsets에서 직접 x, y 값 사용
-        x_i = self.corner_offsets[label]["x"]
-        y_i = self.corner_offsets[label]["y"]
+        # 휠 위치 벡터 (CG 기준, 바디 좌표계)
+        # x_i = (L_wheelbase/2) * sign_pitch, y_i = (L_track/2) * sign_roll
+        x_i = (self.params.L_wheelbase / 2.0) * signs["pitch"]
+        y_i = (self.params.L_track / 2.0) * signs["roll"]
         r = np.array([x_i, y_i, -self.params.h_CG])
 
         # 휠 속도: V_wheel = V_CG + ω × r
@@ -507,18 +459,15 @@ class VehicleBody:
             "wheel_velocities": wheel_velocities,
         }
 
-    def assemble_forces_moments(self, corner_outputs: Dict[str, Tuple[float, float, float]],
-                                ax: float = 0.0, ay: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
+    def assemble_forces_moments(self, corner_outputs: Dict[str, Tuple[float, float, float]]) -> Tuple[np.ndarray, np.ndarray]:
         """
-        4개 코너 힘을 차체 좌표계 forces, moments로 합산 + 가속도 기반 관성 모멘트 추가
+        4개 코너 힘을 차체 좌표계 forces, moments로 합산
 
         Args:
             corner_outputs: 코너별 출력 {label: (F_s, F_x, F_y), ...}
                 - F_s: 서스펜션 힘 (z 방향) [N]
                 - F_x: 종방향 타이어 힘 (휠 좌표계) [N]
                 - F_y: 횡방향 타이어 힘 (휠 좌표계) [N]
-            ax: 종방향 가속도 [m/s²] (이전 스텝 값)
-            ay: 횡방향 가속도 [m/s²] (이전 스텝 값)
 
         Returns:
             forces: 총 힘 [Fx, Fy, Fz] (바디 좌표계) [N]
@@ -533,10 +482,6 @@ class VehicleBody:
             Mx (Roll)  = Σ (y_i × F_s)           # 좌우 수직력 차이
             My (Pitch) = Σ (-x_i × F_s)          # 전후 수직력 차이
             Mz (Yaw)   = Σ (x_i × F_y - y_i × F_x) # 수평 힘의 모멘트
-
-        관성 모멘트 (하중 이동):
-            M_x_acc = m* × h_CG × ay   # 롤 모멘트 (선회 시)
-            M_y_acc = -m* × h_CG × ax  # 피치 모멘트 (가속/제동 시)
         """
         # 초기화
         F_total = np.zeros(3)  # [Fx, Fy, Fz]
@@ -547,15 +492,16 @@ class VehicleBody:
                 continue
 
             F_s, F_x, F_y = corner_outputs[label]
+            signs = self.corner_signs[label]
             # 조향각으로 휠→바디 회전
             delta = self.corners[label].state.steering_angle
             c, s = np.cos(delta), np.sin(delta)
             F_x_body = c * F_x - s * F_y
             F_y_body = s * F_x + c * F_y
 
-            # 1. 코너 위치 (CG 기준, 바디 좌표계) - corner_offsets에서 직접 사용
-            x_i = self.corner_offsets[label]["x"]
-            y_i = self.corner_offsets[label]["y"]
+            # 1. 코너 위치 (CG 기준, 바디 좌표계)
+            x_i = (self.params.L_wheelbase / 2.0) * signs["pitch"]  # 전후 위치
+            y_i = (self.params.L_track / 2.0) * signs["roll"]       # 좌우 위치
 
             # 2. 힘 합산
             F_corner = np.array([F_x_body, F_y_body, F_s])
@@ -569,18 +515,5 @@ class VehicleBody:
 
             M_corner = np.array([M_roll, M_pitch, M_yaw])
             M_total += M_corner
-
-        # 4. 가속도 기반 관성 모멘트 추가 (하중 이동 효과)
-        # 동적 CG 높이 사용: h_CG = z_CG0 + heave
-        h_CG_dynamic = self.params.h_CG + self.state.heave
-        m_star = self.params.m  # 스프렁 질량
-
-        # 관성 모멘트 계산
-        M_x_acc = m_star * h_CG_dynamic * ay   # 롤 모멘트 (선회 시, +ay → +roll)
-        M_y_acc = -m_star * h_CG_dynamic * ax  # 피치 모멘트 (가속 시, +ax → -pitch/nose-up)
-
-        # 모멘트에 추가
-        M_total[0] += M_x_acc
-        M_total[1] += M_y_acc
 
         return F_total, M_total
