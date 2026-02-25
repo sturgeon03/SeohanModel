@@ -1,0 +1,11 @@
+Modeling Quick Start Summary
+============================
+steps: 1200
+dt_s: 0.01
+total_time_s: 11.990
+final_x_m: -0.047
+final_y_m: -0.541
+final_speed_kph: 0.264
+max_speed_kph: 3.075
+max_abs_roll_deg: 5.134
+max_abs_pitch_deg: 0.545
