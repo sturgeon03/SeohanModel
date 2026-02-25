@@ -116,7 +116,7 @@ class LateralTireModel:
         """
         Fy = Fy_override if Fy_override is not None else self.calculate_force(alpha, F_tire)
         # trail*Fy가 조향을 복원하는 방향(슬립 감소)으로 작용하도록 부호 설정
-        M_z =  self.params.trail * Fy
+        M_z = self.params.trail * Fy
         return float(M_z)
 
     def get_state(self) -> Dict:
