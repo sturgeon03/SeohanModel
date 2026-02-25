@@ -95,7 +95,7 @@ class ECorner:
         self.steering = SteeringModel(config=steering_cfg, config_path=config_path, corner_id=corner_id)
 
         self.brake = BrakeModel(config_path=config_path)
-        self.drive = DriveModel(config_path=config_path)
+        self.drive = DriveModel(config_path=config_path, corner_id=corner_id)
         self.suspension = SuspensionModel(corner_id=corner_id, config_path=config_path)
         self.longitudinal_tire = LongitudinalTireModel(config_path=config_path)
         self.lateral_tire = LateralTireModel(config_path=config_path)
@@ -127,7 +127,13 @@ class ECorner:
         F_clamp = self.brake.update(dt, T_brk)
 
         # 3. Wheel Dynamics: T_Drv, F_clamp, F_x_tire(이전 스텝), direction → ω_wheel
-        omega_wheel = self.drive.update(dt, T_Drv, F_clamp, self.state.F_x_tire, direction)
+        omega_wheel = self.drive.update(
+            dt=dt,
+            T_Drv=T_Drv,
+            F_x=self.state.F_x_tire,
+            F_clamp=F_clamp,
+            direction=direction
+        )
 
         # 4. Suspension Dynamics: T_susp, X_body, z_road, z_road_dot → F_s, F_z
         F_s, F_z = self.suspension.update(dt, T_susp, X_body, z_road, z_road_dot)
