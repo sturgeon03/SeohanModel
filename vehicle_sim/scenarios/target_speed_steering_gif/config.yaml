@@ -1,0 +1,91 @@
+# Target speed + per-wheel steering GIF scenario
+
+sim:
+  dt: 0.001
+  time: 20.0
+  direction: 1
+  log_stride: 5
+  vehicle_config_path: null
+
+# Targets are body speed + per-wheel steering angles.
+# Steering can be specified in degrees or radians.
+targets:
+  speed_mps: 3.0
+  steering_unit: deg
+  steering_deg:
+    FL: 20.0
+    FR: 20.0
+    RL: 10.0
+    RR: 10.0
+  steering_profile:
+    enabled: true
+    type: sine
+    unit: deg
+    default:
+      amp: 0.0
+      bias: 0.0
+      phase: 0.0
+      freq_hz: 0.1
+    wheels:
+      FL:
+        amp: 15.0
+        bias: 0.0
+        phase: 0.0
+        freq_hz: 0.1
+      FR:
+        amp: 15.0
+        bias: 0.0
+        phase: 0.0
+        freq_hz: 0.1
+      RL:
+        amp: 0.0
+        bias: 0.0
+        phase: 0.0
+        freq_hz: 0.0
+      RR:
+        amp: 0.0
+        bias: 0.0
+        phase: 0.0
+        freq_hz: 0.0
+
+speed_controller:
+  gains:
+    kp: 100.0
+    ki: 50.0
+    kd: 0.1
+    accel_limit: 5.0
+    torque_limit: 400.0
+    torque_rate_limit: null
+    integrator_limit: null
+
+steering_controller:
+  align_torque_source: estimate  # estimate | true | ignore
+  feedforward:
+    max_accel: null
+    torque_limit: null
+  feedback:
+    enabled: true
+    kp: 100.0
+    ki: 50.0
+    kd: 10.0
+
+estimator:
+  slip_angle:
+    ay_bias: 0.0
+    lowpass_tau: null
+    vy_init: 0.0
+    vy_limit: null
+    leak_tau: null
+    min_vx: 0.1
+  lateral_force:
+    use_command_limit: false
+    min_cmd_abs: 1e-3
+
+output:
+  save_gif: true
+  gif_filename: target_speed_steering.gif
+  max_gif_frames: 500
+  stride: 20
+  save_steering_plot: true
+  steering_plot_filename: steering_angles.png
+  save_dir: output

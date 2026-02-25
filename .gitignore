@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Quick start outputs
+outputs/modeling_quickstart/*
+!outputs/modeling_quickstart/.gitkeep
+
+# EX validation outputs
+outputs/ex_validation/
