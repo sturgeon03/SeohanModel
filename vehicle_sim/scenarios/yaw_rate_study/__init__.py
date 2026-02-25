@@ -1,0 +1,2 @@
+"""Yaw-rate study scenario."""
+

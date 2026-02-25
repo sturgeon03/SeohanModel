@@ -1,0 +1,154 @@
+# Yaw-rate study configuration
+
+sim:
+  dt: 0.001              # 시뮬레이션 시간 간격 [s] | 추천: 0.001 (J 식별은 0.0005)
+  time: 50.0             # 총 시뮬레이션 시간 [s] | 추천: 10.0
+  speed_mps: 10.0        # 목표 속도 [m/s] | 추천: 10.0
+  seed: 1                # 랜덤 시드 | 추천: 1
+  speed_mode: pid       # 속도 유지 방식: lock(강제 고정) or pid(속도 제어기) | 추천: lock
+  vehicle_config_path: null  # 차량 파라미터 YAML 경로 (null이면 기본 vehicle_standard.yaml) | 추천: null
+
+control:
+  mode: ff_fb_ls            # 제어기 모드: ff, ff_fb, ff_ls, ff_fb_ls | 추천: ff_ls
+  feedback:
+    yaw_rate: true         # 요레이트 피드백 사용 여부 | 추천: false
+    fy: true              # 휠 횡력(Fy) 피드백 사용 여부 | 추천: false
+    fy_source: estimate        # Fy 피드백 소스: true(시뮬레이션) / estimate(ay 추정치) | 추천: true
+    steering: true         # 조향각 피드백 사용 여부 | 추천: false
+  feedforward:
+    use_align_torque: true # FF에 얼라이닝 토크 보상 사용 여부 | 추천: true
+    max_accel: null        # 조향 가속도 제한 [rad/s^2] (null이면 제한 없음) | 추천: null
+    torque_limit: null     # 조향 토크 제한 [N*m] (null이면 제한 없음) | 추천: null
+    param_bias_enabled: false  # true면 FF에서 쓰는 B/Cα를 (1+param_bias_percent)로 시작(모델 mismatch 가정)
+    param_bias_percent: 0.10   # 상대 바이어스 (0.10 = +10%)
+
+randomization:
+  enabled: true            # 파라미터 랜덤화 사용 여부 | 추천: true
+  mode: gaussian             # 랜덤화 방식: static(1회) or gaussian(연속 드리프트) | 추천: gaussian
+  percent: 0.10            # B_cq, C_alpha 변동 범위 (예: 0.10 = ±10%) | 추천: 0.10
+  per_wheel: false         # 바퀴별로 독립 랜덤화할지 여부 | 추천: false
+  randomize_b: true       # B_cq 랜덤화 사용 여부 | 추천: true
+  randomize_c: true        # C_alpha 랜덤화 사용 여부 | 추천: true
+  gaussian:
+    sigma_percent: 0.05   # 1σ 변화율(상대값)/sqrt(s) (예: 0.002 = 0.2%/sqrt(s)) | 추천: 0.005
+    update_every: 100        # 업데이트 스텝 간격 (1=매 스텝) | 추천: 1
+    randomize_initial: false   # true면 초기 랜덤화 ON, false면 nominal에서 드리프트 시작 | 추천: true
+
+estimator:
+  enabled: true            # 최소자승/추정기 사용 여부 | 추천: true
+  type: rls                # 추정 방식 (현재 rls만 사용) | 추천: rls
+  c_alpha_source: estimate     # C_alpha 추정 입력: true(실제값) / estimate(추정치) | 추천: true
+  b_align_source: estimate     # B_cq 추정용 align torque: true(모델) / estimate(추정) / ignore(0) | 추천: true
+  # 공통(기본) RLS 파라미터: estimator.b / estimator.c_alpha가 없으면 이 값을 사용
+  lambda: 0.999
+  p0: 3.5
+  min_samples: 4000
+  start_time: 3.0           # 공통 start time (개별 설정: estimator.b.start_time / estimator.c_alpha.start_time)
+
+  # 분리 튜닝(선택): B용 / Cα용으로 λ, p0, min_samples, sample_decimation을 따로 줄 수 있음
+  # (여기 값을 채우면 위의 공통 값보다 우선 적용)
+  b:
+    start_time: 0.1
+    lambda: 0.9995
+    p0: 5.0
+    min_samples: 4000
+    sample_decimation: 1   # B 전용
+    
+  c_alpha:
+    start_time: 1.0
+    lambda: 0.99
+    p0: 50.0
+    min_samples: 10000
+    sample_decimation: 5   # Cα 전용
+
+  dot_min_abs: 0.00001
+  alpha_min_abs: 0.0001
+  fz_min: 100.0
+  fy_saturation_margin: 0.05
+  angle_margin_rad: 0.02
+  rate_margin_rad_s: 0.2
+  clamp:
+    b_min: 1.0             # B_cq 하한 | 추천: 1.0
+    b_max: 200.0           # B_cq 상한 | 추천: 200.0
+    c_alpha_min: 20000.0   # C_alpha 하한 [N/rad] | 추천: 20000.0
+    c_alpha_max: 200000.0  # C_alpha 상한 [N/rad] | 추천: 200000.0
+
+
+
+
+
+
+
+
+
+lateral_force_estimator:
+  enabled: true            # ay 기반 Fy_total 추정/평가 사용 여부 | 추천: true
+  ay_source: imu           # ay 입력 소스: imu(특정힘) / kinematic(속도+요레이트) | 추천: imu
+  ay_bias: 0.0             # 측정 ay 바이어스 보정 [m/s^2] | 추천: 0.0
+  lowpass_tau: null        # ay 저역통과 필터 시정수 [s] (null이면 미사용) | 추천: 0.05
+  max_abs_ay: null         # ay 클램프 [m/s^2] (null이면 미사용) | 추천: null
+
+# yaw_rate_cmd generators
+# - sine: ramped sine
+# - circle: constant yaw rate with smooth ramp
+# - step: step yaw rate (optional ramp)
+# - chirp: sine with time-varying frequency
+# - square: square wave (with smoothed edges)
+
+yaw_profile:
+  type: sine           # 사용할 요레이트 프로파일: sine/circle/step/chirp/square | 추천: chirp
+  sine:
+    amp: 0.5             # 진폭 [rad/s] | 추천: 0.30
+    freq_hz: 0.1       # 주파수 [Hz] | 추천: 0.50
+    start_delay: 1.0      # 시작 지연 [s] | 추천: 1.0
+    ramp_time: 50.0        # 램프업 시간 [s] | 추천: 1.0
+  circle:
+    yaw_rate: 0.20        # 일정 요레이트 [rad/s] | 추천: 0.20
+    start_delay: 1.0      # 시작 지연 [s] | 추천: 1.0
+    ramp_time: 50.0        # 램프업 시간 [s] | 추천: 1.0
+  step:
+    value: 0.5           # 스텝 크기 [rad/s] | 추천: 0.25
+    start_time: 1.0       # 스텝 시작 시간 [s] | 추천: 1.0
+    ramp_time: 0.5        # 스텝 램프 시간 [s] | 추천: 0.5
+  square:
+    amp: 0.001             # 진폭 [rad/s] | 추천: 0.25
+    freq_hz: 0.10         # 스위칭 주파수 [Hz] | 추천: 0.50
+    start_delay: 1.0      # 시작 지연 [s] | 추천: 1.0
+    ramp_time: 5.0        # 시작 램프업 시간 [s] | 추천: 1.0
+    transition_time: 0.10 # 각 전환(±amp) 구간의 부드러운 전이 시간 [s] | 추천: 0.10
+    start_sign: 1         # 시작 부호(+1/-1) | 추천: 1
+  chirp:
+    amp: 0.01             # 진폭 [rad/s] | 추천: 0.25
+    f0_hz: 0.01           # 시작 주파수 [Hz] | 추천: 0.20
+    f1_hz: 0.05           # 종료 주파수 [Hz] | 추천: 1.50
+    t1: 8.0               # 주파수 스윕 시간 [s] | 추천: 8.0
+    start_delay: 1.0      # 시작 지연 [s] | 추천: 1.0
+    ramp_time: 2.0        # 램프업 시간 [s] | 추천: 1.0
+
+output:
+  plot: true              # 플롯 생성 여부 | 추천: true
+  plot_mode: paper    # 플롯 모드: paper(논문용 최소) / debug(전체) | 추천: paper
+  paper_wheel: FL         # paper 모드에서 대표로 표시할 휠 라벨 | 추천: FL
+  style:
+    font_size: 14         # 논문용 글자 크기 (전체) | 추천: 14
+    grid_alpha: 0.3       # 그리드 투명도(0~1) | 추천: 0.3
+    # Color palette (Okabe-Ito, color-blind friendly)
+    input_color: "#6c757d"        # 입력(ref/cmd) 선 색상 (matplotlib 색 지정)
+    input_alpha: 0.55     # 입력(ref/cmd) 선 투명도(0~1) | 추천: 0.55
+    output_alpha: 0.9     # 출력(실제/추정) 선 투명도(0~1) | 추천: 0.9
+    true_color: "#1f77b4"         # true/nominal 라인(파랑)
+    paper_output_color: "#0072B2" # paper 모드 실제 출력 라인
+    estimate_color: "#ff7f0e"     # 추정치 라인(주황)
+    beta_color: "#0072B2"         # β 라인(실제)
+    error_color: "#D55E00"        # error 라인
+    mode_tint: 0.35       # 모드 컬러를 휠별 색상에 섞는 비율(0~1) | 추천: 0.35
+    mode_colors:          # control.mode별 출력 라인 기본 색상
+      "ff": "#1f77b4"
+      "ff_fb": "#2ca02c"
+      "ff_ls": "#ff7f0e"
+      "ff_fb_ls": "#d62728"
+  show_plots: true        # 플롯 화면 표시 여부 | 추천: true
+  save_npz: false         # 결과 npz 저장 여부 | 추천: false
+  save_json: true        # 메트릭 json 저장 여부 | 추천: false
+  save_dir: SeohanModel/vehicle_sim/scenarios/yaw_rate_study/output  # 저장 폴더 | 추천: SeohanModel/vehicle_sim/scenarios/yaw_rate_study/output
+  tag: default            # 파일 이름 태그 | 추천: default
