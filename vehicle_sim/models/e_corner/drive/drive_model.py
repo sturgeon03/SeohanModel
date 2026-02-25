@@ -52,12 +52,13 @@ class DriveModel:
     - 최대 휠 각속도: ±60.63 rad/s (≈579 rpm, R_eff=0.316 m 기준 선속도 ≈68.9 km/h)
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, corner_id: Optional[str] = None):
         """
         휠 동역학 모델 초기화
 
         Args:
             config_path: YAML 설정 파일 경로. None이면 기본 vehicle_standard.yaml 사용
+            corner_id: 코너 ID ('FL', 'FR', 'RL', 'RR'). B_wheel 선택에 사용.
         """
         # 차량 스펙에서 휠 파라미터 로드
         vehicle_spec = load_param('vehicle_spec', config_path)
@@ -67,10 +68,21 @@ class DriveModel:
         drive_param = load_param('drive', config_path)
         brake_param = load_param('brake', config_path)
 
+        # J_wheel, B_wheel: corner_id에 따라 front/rear 선택
+        if corner_id and corner_id[0] == 'F':  # Front wheels (FL, FR)
+            J_wheel = float(wheel_spec.get('J_wheel_front', wheel_spec.get('J_wheel', 0.5)))
+            B_wheel = float(wheel_spec.get('B_wheel_front', 0.1))
+        elif corner_id and corner_id[0] == 'R':  # Rear wheels (RL, RR)
+            J_wheel = float(wheel_spec.get('J_wheel_rear', wheel_spec.get('J_wheel', 0.5)))
+            B_wheel = float(wheel_spec.get('B_wheel_rear', 0.34))
+        else:  # Fallback to legacy single value
+            J_wheel = float(wheel_spec.get('J_wheel', 0.5))
+            B_wheel = float(wheel_spec.get('B_wheel', 0.0))
+
         self.params = DriveParameters(
-            J_wheel=float(wheel_spec.get('J_wheel', 0.5)),
+            J_wheel=J_wheel,
             R_wheel=float(wheel_spec.get('R_eff', 0.3)),
-            B_wheel=max(float(wheel_spec.get('B_wheel', 0.0)), 0.0),
+            B_wheel=max(B_wheel, 0.0),
             max_wheel_speed=float(drive_param.get('max_wheel_speed', 60.63))
         )
         self.brake_params = BrakeTorqueParameters(
@@ -80,28 +92,32 @@ class DriveModel:
         self._clamp_to_torque = self._compute_clamp_to_torque_gain()
         self.state = DriveState()
 
-    def update(self, dt: float, T_Drv: float, F_clamp: float, F_x: float, direction: int = 1) -> float:
+    def update(self, dt: float, T_Drv: float, F_x: float,
+               F_clamp: float = 0.0, M_brk_signed: Optional[float] = None,
+               direction: int = 1) -> float:
         """
         휠 동역학 업데이트
 
         입력:
             - T_Drv: 구동 토크 크기 (절댓값) [N·m]
-            - F_clamp: 브레이크 클램핑력 (절댓값) [N]
             - F_x: 종방향 타이어 힘 (이전 스텝 값) [N]
+            - F_clamp: 브레이크 클램핑력 (절댓값) [N] (M_brk_signed가 None일 때 사용)
+            - M_brk_signed: 브레이크 토크 (부호 포함) [N·m] (우선순위 높음, None이면 F_clamp 사용)
             - direction: 전진/후진 방향 (1: 전진, -1: 후진)
 
         출력:
             - ω_wheel: 휠 각속도 [rad/s]
 
-        브레이크 모멘트 환산:
-        M_brk = μ_pad * R_rotor * F_clamp
+        브레이크 모멘트 처리:
+        - M_brk_signed가 제공되면 직접 사용 (CarMaker 데이터 등)
+        - M_brk_signed가 None이면 F_clamp로부터 계산 및 부호 처리
 
-        회전 운동 방정식 (M_brk_signed는 휠 속도 반대 방향):
+        회전 운동 방정식:
             J * dω/dt = T_Drv_signed - R*F_x + M_brk_signed - B*ω
 
         방향 처리:
         - T_Drv_signed = direction × T_Drv
-        - M_brk_signed = -sign(ω) × M_brk (휠 속도 반대 방향으로 작용, tanh 스무딩)
+        - M_brk_signed: 휠 속도 반대 방향 (음수)
 
         이산화:
         dω = (dt/J) * (T_Drv_signed - R*F_x + M_brk_signed - B*ω_old)
@@ -113,14 +129,21 @@ class DriveModel:
         # 1. 방향을 고려한 구동 토크
         T_Drv_signed = direction * T_Drv
 
-        # 2. 클램핑력 → 브레이크 모멘트 환산
-        F_clamp_eff = max(F_clamp, 0.0)  # 음수 입력은 무효 처리
-        M_brk = self._clamp_to_torque * F_clamp_eff
-
-        # 3. 브레이크 토크는 휠 속도 반대 방향으로 작용
+        # 2. 현재 휠 속도
         omega = self.state.wheel_speed
-        omega0 = 0.7  # [rad/s] 0.2~1.0 권장
-        M_brk_signed = -M_brk * np.tanh(omega / omega0)
+
+        # 3. 브레이크 모멘트 계산
+        if M_brk_signed is not None:
+            # 직접 브레이크 토크 사용 (CarMaker 데이터 등)
+            pass  # M_brk_signed 그대로 사용
+        else:
+            # 클램핑력 → 브레이크 모멘트 환산
+            F_clamp_eff = max(F_clamp, 0.0)  # 음수 입력은 무효 처리
+            M_brk = self._clamp_to_torque * F_clamp_eff
+
+            # 브레이크 토크는 휠 속도 반대 방향으로 작용
+            omega0 = 0.7  # [rad/s] 0.2~1.0 권장
+            M_brk_signed = -M_brk * np.tanh(omega / omega0)
 
         # 4. 순 토크 계산
         # 휠 점성 마찰 토크:
