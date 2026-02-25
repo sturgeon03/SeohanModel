@@ -327,7 +327,7 @@ class VehicleBody:
         linear_acc = np.array([
             F_total[0] / self.params.m_total - coriolis_term[0],  # ax: 전체 질량
             F_total[1] / self.params.m_total - coriolis_term[1],  # ay: 전체 질량
-            F_total[2] / self.params.m - coriolis_term[2]   # az: 전체 질량 (수정!)
+            F_total[2] / self.params.m - coriolis_term[2],  # az: body mass vertical acceleration
         ])
 
         # 2. 각 가속도
@@ -441,25 +441,12 @@ class VehicleBody:
         self.state.yaw_rate = float(state_vector[11])
 
     def reset(self) -> None:
-        """차체 상태 초기화 (평형 상태로 리셋)"""
+        """Reset body and all E-Corner states."""
         self.state = VehicleBodyState()
 
-        # E-Corner도 평형으로 리셋
+        # Reset every E-Corner completely so no internal state leaks across restarts.
         for corner in self.corners.values():
-            corner.suspension.reset()
-
-        # 리셋 후 한 번 업데이트하여 평형 상태의 힘을 계산
-        dummy_inputs = {
-            label: {
-                "T_steer": 0.0,
-                "T_brk": 0.0,
-                "T_Drv": 0.0,
-                "T_susp": 0.0,
-                "z_road": 0.0
-            }
-            for label in self.wheel_labels
-        }
-        self.update(dt=0.001, corner_inputs=dummy_inputs)
+            corner.reset()
 
     def get_corner_inputs(self) -> Dict:
         """

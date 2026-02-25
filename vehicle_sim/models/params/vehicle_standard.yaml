@@ -133,40 +133,20 @@ suspension:
 steering:
   # Parameter order inspired by:
   # A. Marouf et al., "A New Control Strategy of an Electric-Power-Assisted Steering System",
-  # IEEE Trans. Veh. Technol., 61(8):3574–3589, 2012.
+  # IEEE Trans. Veh. Technol., 61(8):3574-3589, 2012.
   # Values are tuned but kept in a similar range to the EPAS steering column model.
 
-  # 동역학 파라미터
-  J_cq: 0.07 # 0.01 ~ 0.2      # 등가 관성 [kg*m^2] 유지하려는 성질
-  B_cq: 400.0 # 1.0 ~ 3.0           # 점성 댐핑 [N*m*s/rad] 둔감해지려는 성질
-  max_rate: 6.283185    # 최대 조향 속도 [rad/s] (360 deg/s)
-
-  # 조향 시스템 기어비 및 효율
-  # i_s = θ_SW / δ_roadwheel (steering wheel angle / road wheel angle)
-  # 데이터 기반 추정: i_s ≈ 16.58 (CM_Lateral CSV 분석 결과)
-  steering_ratio: 16.554   # 조향 기어비 [-] (핸들 각도 / 바퀴 평균 조향각)
-  efficiency: 1.0        # 조향 시스템 효율 [-] (일반적 0.85~0.95)
-
-  # # 좌/우 바퀴 비대칭 조향 한계 (CCW +, CW -)
-  # left:
-  #   max_angle_pos: 1.047198   # +60 deg
-  #   max_angle_neg: -1.710422  # -98 deg
-  # right:
-  #   max_angle_pos: 1.7104220   # +98 deg
-  #   max_angle_neg: -1.047198  # -60 deg
-
-  # 좌/우 바퀴 대칭 조향 한계 (CCW +, CW -)
+  J_cq: 0.0738         # equivalent inertia [kg*m^2]
+  B_cq: 85.61          # viscous damping [N*m*s/rad]
+  gear_ratio: 118.0    # motor shaft to steering shaft ratio [-]
+  max_rate: 6283.185    # max steering rate [rad/s] (3600 deg/s)
+  # Left/right wheel asymmetry limits (CCW+, CW-)
   left:
-    max_angle_pos: 1.570796   # +90 deg
-    max_angle_neg: -1.570796  # -90 deg
-
+    max_angle_pos: 1.047198   # +60 deg
+    max_angle_neg: -1.710422  # -98 deg
   right:
-    max_angle_pos: 1.570796   # +90 deg
-    max_angle_neg: -1.570796  # -90 deg
-
-
-
-# 타이어 파라미터
+    max_angle_pos: 1.7104220   # +98 deg
+    max_angle_neg: -1.047198  # -60 deg
 tire:
   # 공통 마찰 계수 (횡/종방향 공용)
   mu: 1.0           # 마찰 계수 (건조 노면) [-]

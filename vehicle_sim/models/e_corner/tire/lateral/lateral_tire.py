@@ -1,9 +1,14 @@
-#수정중
-#!/bin/python3
+#!/usr/bin/env python3
 """
-횡방향 타이어 동역학 모델 (모든 입력/출력은 휠 로컬 좌표계 기준)
-입력: α (slip angle), V_wx, V_wy (휠 속도, 휠 프레임)
-출력: F_y^lateral (횡방향 타이어 힘, 휠 프레임)
+Lateral tire model.
+
+Inputs:
+    - V_wheel_x, V_wheel_y: wheel-frame longitudinal/lateral velocities [m/s]
+    - F_tire: normal load on tire [N]
+
+Outputs:
+    - F_y_tire: lateral force [N]
+    - aligning torque (stored in state)
 """
 
 import numpy as np
@@ -15,36 +20,30 @@ from vehicle_sim.utils.config_loader import load_param
 
 @dataclass
 class LateralTireParameters:
-    """횡방향 타이어 파라미터"""
-    C_alpha: float = 80000.0   # 코너링 강성 [N/rad]
-    mu: float = 0.9            # 마찰계수 [-]
-    trail: float = 0.05        # 트레일 길이 [m] (얼라이닝 토크 계산용)
+    """Parameters for a single lateral tire model."""
+
+    C_alpha: float = 80000.0   # Cornering stiffness [N/rad]
+    mu: float = 0.9            # Tire-road friction coefficient [-]
+    trail: float = 0.05        # Wheel trail [m]
 
 
 @dataclass
 class LateralTireState:
-    """횡방향 타이어 상태 변수"""
-    slip_angle: float = 0.0        # α: 슬립각 [rad]
-    lateral_force: float = 0.0     # F_y [N]
-    aligning_torque: float = 0.0   # M_z [N*m]
+    """Runtime state for lateral tire model."""
+
+    slip_angle: float = 0.0      # Slip angle [rad]
+    lateral_force: float = 0.0   # F_y [N]
+    aligning_torque: float = 0.0 # M_z [N*m]
 
 
 class LateralTireModel:
-    """
-    횡방향 타이어 동역학 모델
-    입력: α, V_wheel_x, V_wheel_y (휠 프레임 속도)
-    출력: F_y^lateral
+    """Lateral tire model.
+
+    Simple linear relation in slip angle with friction limit.
     """
 
     def __init__(self, parameters: Optional[LateralTireParameters] = None,
                  config_path: Optional[str] = None):
-        """
-        횡방향 타이어 모델 초기화
-
-        Args:
-            parameters: 파라미터 객체 (직접 주입 시)
-            config_path: YAML 설정 파일 경로. None이면 기본 vehicle_standard.yaml 사용
-        """
         if parameters is not None:
             self.params = parameters
         else:
@@ -52,34 +51,26 @@ class LateralTireModel:
             lateral_param = tire_param.get('lateral', {})
             self.params = LateralTireParameters(
                 C_alpha=float(lateral_param.get('C_alpha', LateralTireParameters.C_alpha)),
-                mu=float(
-                    lateral_param.get(
-                        'mu',
-                        tire_param.get('mu', LateralTireParameters.mu),
-                    )
-                ),
+                mu=float(lateral_param.get('mu', tire_param.get('mu', LateralTireParameters.mu))),
                 trail=float(lateral_param.get('trail', LateralTireParameters.trail)),
             )
         self.state = LateralTireState()
 
-    def update(self, V_wheel_x: float, V_wheel_y: float,
-               F_tire: float) -> float:
-        """
-        슬립각 → 횡력/얼라이닝 토크 계산 후 상태 갱신
+    def update(self, V_wheel_x: float, V_wheel_y: float, F_tire: float) -> float:
+        """Update lateral force and aligning torque.
 
         Args:
-            V_wheel_x: 휠 종방향 속도 [m/s]
-            V_wheel_y: 휠 횡방향 속도 [m/s]
-            F_tire: 수직하중/언스프렁 힘 [N]
+            V_wheel_x: wheel-frame longitudinal velocity [m/s]
+            V_wheel_y: wheel-frame lateral velocity [m/s]
+            F_tire: normal load [N]
 
         Returns:
-            횡방향 타이어 힘 F_y [N]
+            lateral force F_y [N]
         """
         alpha = self.calculate_slip_angle(V_wheel_x, V_wheel_y)
         Fy = self.calculate_force(alpha, F_tire)
         M_z = self.calculate_aligning_torque(alpha, F_tire, Fy_override=Fy)
 
-        # 상태 저장
         self.state.slip_angle = alpha
         self.state.lateral_force = Fy
         self.state.aligning_torque = M_z
@@ -87,40 +78,26 @@ class LateralTireModel:
         return Fy
 
     def calculate_slip_angle(self, V_wheel_x: float, V_wheel_y: float) -> float:
-        """
-        슬립 각도 계산
-        입력: V_wheel_x, V_wheel_y (휠 속도, 휠 로컬 프레임)
-        출력: α (slip angle). 휠 프레임 기준이므로 steering_angle 보정 없음.
-        """
-        alpha = np.arctan2(V_wheel_y, V_wheel_x)
-        return float(alpha)
+        """Calculate slip angle in wheel frame."""
+        return float(np.arctan2(V_wheel_y, V_wheel_x))
 
     def calculate_force(self, alpha: float, F_tire: float) -> float:
-        """
-        횡방향 타이어 힘 계산
-        입력: α (slip angle), F_tire (언스프렁 힘)
-        출력: F_y^lateral
-        """
-        # F_y = -C_alpha * F_z * alpha
+        """Calculate lateral force with linear + friction limit."""
         Fy = -self.params.C_alpha * alpha
         Fy_max = abs(self.params.mu * F_tire)
-        Fy_limited = float(np.clip(Fy, -Fy_max, Fy_max))
-        return Fy_limited
+        return float(np.clip(Fy, -Fy_max, Fy_max))
 
     def calculate_aligning_torque(self, alpha: float, F_tire: float,
                                   Fy_override: Optional[float] = None) -> float:
-        """
-        얼라이닝 토크 계산
-        입력: α (slip angle), F_tire (언스프렁 힘)
-        출력: M_z (얼라이닝 토크, 복원 방향)
+        """Calculate steering self-aligning torque from lateral force.
+
+        The simplified model uses `M_z = trail * F_y`.
         """
         Fy = Fy_override if Fy_override is not None else self.calculate_force(alpha, F_tire)
-        # trail*Fy가 조향을 복원하는 방향(슬립 감소)으로 작용하도록 부호 설정
-        M_z = self.params.trail * Fy
-        return float(M_z)
+        return float(self.params.trail * Fy)
 
     def get_state(self) -> Dict:
-        """현재 횡타이어 상태 조회"""
+        """Return current tire state."""
         return {
             "slip_angle": self.state.slip_angle,
             "lateral_force": self.state.lateral_force,
@@ -128,5 +105,5 @@ class LateralTireModel:
         }
 
     def reset(self) -> None:
-        """횡타이어 상태 리셋"""
+        """Reset lateral tire state."""
         self.state = LateralTireState()

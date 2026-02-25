@@ -133,16 +133,14 @@ class DriveModel:
         omega = self.state.wheel_speed
 
         # 3. 브레이크 모멘트 계산
-        if M_brk_signed is not None:
-            # 직접 브레이크 토크 사용 (CarMaker 데이터 등)
-            pass  # M_brk_signed 그대로 사용
-        else:
-            # 클램핑력 → 브레이크 모멘트 환산
-            F_clamp_eff = max(F_clamp, 0.0)  # 음수 입력은 무효 처리
+        # 3. Brake torque handling
+        if M_brk_signed is None:
+            # Clamped brake input requested (input-only torque)
+            F_clamp_eff = max(F_clamp, 0.0)
             M_brk = self._clamp_to_torque * F_clamp_eff
 
-            # 브레이크 토크는 휠 속도 반대 방향으로 작용
-            omega0 = 0.7  # [rad/s] 0.2~1.0 권장
+            # Brake model output uses wheel speed state
+            omega0 = 0.7  # [rad/s]
             M_brk_signed = -M_brk * np.tanh(omega / omega0)
 
         # 4. 순 토크 계산
