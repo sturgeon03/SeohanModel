@@ -41,7 +41,6 @@ class BrakeModel:
     (μ_pad·R_rotor 곱)은 상위 drive_model에서 수행한다.
     """
 
-
     def __init__(self, config_path: Optional[str] = None):
         """
         브레이크 모델 초기화
@@ -61,7 +60,6 @@ class BrakeModel:
         self._clamp_gain = self._compute_clamp_gain()
         self._max_clamp_force = self._compute_max_clamp_force()
         self.state = BrakeState()
-
 
     def update(self, dt: float, T_brk: float) -> float:
         """
@@ -89,7 +87,6 @@ class BrakeModel:
 
         return F_clamp
 
-
     def _compute_clamp_gain(self) -> float:
         """F_clamp = clamp_gain * τ_m 계산을 위한 게인"""
         if self.params.A_eff <= 0.0:
@@ -97,7 +94,6 @@ class BrakeModel:
         if self.params.V_d <= 0.0:
             raise ValueError("Brake parameter V_d must be positive.")
         return (4.0 * np.pi * self.params.A_eff) / self.params.V_d
-
 
     def _compute_max_clamp_force(self) -> float:
         """
@@ -109,13 +105,11 @@ class BrakeModel:
         p_max_pa = self.params.p_max_bar * 1e5  # [Pa]
         return 2.0 * self.params.A_eff * p_max_pa
 
-
     def get_state(self) -> Dict:
         """현재 브레이크 상태 조회"""
         return {
             'clamp_force': self.state.clamp_force
         }
-
 
     def reset(self) -> None:
         """브레이크 상태 리셋"""
