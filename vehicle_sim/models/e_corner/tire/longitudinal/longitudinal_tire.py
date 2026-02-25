@@ -30,13 +30,17 @@ class LongitudinalTireState:
 
 class LongitudinalTireModel:
     """
-    종방향 타이어 동역학 모델
-    입력: κ (slip ratio), F_z_tire (타이어 수직력)
-    출력: F_x_tire (종방향 타이어 힘)
+    Longitudinal tire model.
 
-    모델:
-    F_x_tire = C_x × F_z_tire × κ
-    단, |F_x_tire| ≤ μ × F_z_tire  (마찰 한계)
+    Inputs: slip ratio kappa and normal load F_z_tire
+    Output: longitudinal force F_x_tire
+
+    Formula:
+        F_x_tire = C_x * kappa
+        |F_x_tire| <= mu * F_z_tire
+
+    This implementation intentionally uses a simplified linear relation for kappa,
+    and applies normal-load-based saturation for physical consistency.
     """
 
     def __init__(self, config_path: Optional[str] = None):
@@ -64,7 +68,7 @@ class LongitudinalTireModel:
 
     def calculate_slip_ratio(self, omega_wheel: float, V_wheel_x: float) -> float:
         """
-        슬립 비율 계산 (저속 데드밴드 적용)
+        슬립 비율 계산
 
         입력:
             - omega_wheel: 휠 각속도 [rad/s]
@@ -81,32 +85,14 @@ class LongitudinalTireModel:
             - κ > 0: 구동 슬립 (가속)
             - κ < 0: 제동 슬립 (감속)
             - κ = 0: 완전 구름 (no slip)
-
-        저속 안정화:
-            - 정지/근접 저속에서 κ를 0으로 강제 (데드밴드)
-            - 등속 영역(예: 5m/s 이상)에는 영향 없음
         """
         # 휠 둘레 속도 (R_eff는 YAML에서 로드됨)
         V_wheel = omega_wheel * self.params.R_eff
 
-        # (1) 정지 근처 데드밴드 (저속 안정화)
-        # CRITICAL: 정지 조건은 "절대 속도가 모두 작을 때만" 적용
-        # 등속 주행(V_wheel ≈ V_wheel_x)과 구분하기 위해 절대값 기준 사용
-        eps_v = 0.5       # 절대 속도 임계값 [m/s] (정지 판정)
-        v_rel = V_wheel - V_wheel_x
-
-        # 정지 판정: 차체 속도와 휠 속도가 모두 eps_v 이하
-        is_stopped = (abs(V_wheel_x) < eps_v and abs(V_wheel) < eps_v)
-
-        if is_stopped:
-            # 정지 상태: 슬립 강제로 0 (수치 안정화)
-            kappa = 0.0
-        else:
-            # (2) 일반 영역: 차체 속도 기준으로 정규화
-            # κ = (V_wheel - V_wheel_x) / |V_wheel_x|
-            # 분모는 차체 속도만 사용 (표준 슬립 정의)
-            denom = max(abs(V_wheel_x), self.params.v_min)
-            kappa = v_rel / denom
+        # 저속에서는 분모가 0에 가까워 슬립이 폭주하므로, 분모를 v_min으로 바닥 처리한다.
+        # (κ=0으로 고정하면 정지 상태에서 구동/제동 힘이 0이 되어 차량이 출발/정지하지 못함)
+        denom = max(abs(V_wheel_x), self.params.v_min)
+        kappa = (V_wheel - V_wheel_x) / denom
 
         # 상태 업데이트
         self.state.slip_ratio = kappa
@@ -115,31 +101,31 @@ class LongitudinalTireModel:
 
     def calculate_force(self, kappa: float, F_z_tire: float) -> float:
         """
-        종방향 타이어 힘 계산
+        Longitudinal tire force calculation.
 
-        입력:
-            - kappa: 슬립 비율 [-]
-            - F_z_tire: 타이어 수직력 [N]
+        Inputs:
+            - kappa: slip ratio [-]
+            - F_z_tire: normal load [N]
 
-        출력:
-            - F_x_tire: 종방향 타이어 힘 [N]
+        Outputs:
+            - F_x_tire: longitudinal tire force [N]
 
-        모델:
-            1. 선형 영역: F_x_tire = C_x × F_z_tire × κ
-            2. 마찰 한계: |F_x_tire| ≤ μ × F_z_tire
+        Formula:
+            1) Simplified model: F_x_tire = C_x * kappa
+            2) Friction limit: |F_x_tire| <= mu * F_z_tire
 
-        특징:
-            - 수직력에 비례하는 강성 (정규화된 C_x)
-            - F_z_tire가 클수록 더 큰 종방향 힘 발생
+        Notes:
+            - C_x is treated as an effective stiffness used in the simplified linear model.
+            - F_z_tire is only used for force saturation (friction cone).
         """
-        # 1. 수직력 비례 모델
+        # 1. Simplified linear tire relation
         F_x_tire = self.params.C_x * kappa
 
-        # 2. 마찰 한계 적용 (포화)
+        # 2. Friction-limited clipping
         F_x_tire_max = self.params.mu * abs(F_z_tire)
         F_x_tire = np.clip(F_x_tire, -F_x_tire_max, F_x_tire_max)
 
-        # 상태 업데이트
+        # update internal state
         self.state.longitudinal_force = F_x_tire
 
         return F_x_tire

@@ -3,9 +3,7 @@
 조향 액추에이터 모델
 능동 조향 및 액추에이터 동역학 구현
 """
-# Dynamics: J_cq * ddot(delta) + B_cq * dot(delta) = (η * i_s) * T_str - T_align
-# Note: K_cq (복원 스프링) 항은 제거됨
-# Note: η * i_s는 조향 기어비 × 효율 (시스템 좌표계 → 코너 등가 좌표계 토크 변환)
+# Dynamics: J_cq * ddot(delta) + B_cq * dot(delta) = T_str * gear_ratio - T_align
 
 import numpy as np
 from typing import Dict, Optional
@@ -19,8 +17,7 @@ class SteeringParameters:
     """조향 액추에이터 파라미터"""
     J_cq: float = 0.05          # 등가 관성 [kg*m^2]
     B_cq: float = 0.5           # 점성 댐핑 [N*m*s/rad]
-    steering_ratio: float = 16.6  # 조향 기어비 i_s (핸들 각도 / 바퀴 조향각) [-]
-    efficiency: float = 0.9     # 조향 시스템 효율 η [-]
+    gear_ratio: float = 118.0   # 모터축 -> 조향축 감속비 [-]
     max_angle_pos: float = 0.0   # 양(+) 방향 최대 조향 각도 [rad] (CCW, config로 주입)
     max_angle_neg: float = 0.0   # 음(-) 방향 최대 조향 각도 [rad] (CW, config로 주입)
     max_rate: float = np.deg2rad(360.0)  # 최대 조향 속도 [rad/s]
@@ -57,8 +54,7 @@ class SteeringModel:
         self.params = SteeringParameters()
         self.params.J_cq = float(steering_param.get('J_cq', self.params.J_cq))
         self.params.B_cq = float(steering_param.get('B_cq', self.params.B_cq))
-        self.params.steering_ratio = float(steering_param.get('steering_ratio', self.params.steering_ratio))
-        self.params.efficiency = float(steering_param.get('efficiency', self.params.efficiency))
+        self.params.gear_ratio = float(steering_param.get('gear_ratio', self.params.gear_ratio))
         self.params.max_rate = float(steering_param.get('max_rate', self.params.max_rate))
 
         # YAML이 steering.left/right 트리 구조일 때를 대비해 좌/우를 선택해 각도 제한을 읽어온다.
@@ -91,24 +87,16 @@ class SteeringModel:
                T_align: float = 0.0) -> float:
         """
         조향 액추에이터 상태 업데이트
-        J_cq * ddot(delta) + B_cq * dot(delta) = (η * i_s) * T_str - T_align
-
-        Args:
-            T_str: 시스템 조향 토크 (DrivMan_SteeringTrq) [N·m]
-            T_align: 타이어 얼라이닝 토크 (Mz) [N·m]
+        J_cq * ddot(delta) + B_cq * dot(delta) = T_str * gear_ratio - T_align
         """
         # 입력/상태 업데이트
-        self.state.steering_torque = T_str
+        self.state.steering_torque = float(T_str) * self.params.gear_ratio
         self.state.self_aligning_torque = T_align
 
-        # 기어비 및 효율을 통한 토크 변환
-        # T_wheel_eq = (efficiency * steering_ratio) * T_str
-        gear_gain = self.params.efficiency * self.params.steering_ratio
-
-        # 2차 시스템 가속도 계산
+        # 2차 시스템 가속도 계산 (스프링 항 제거)
         delta = self.state.steering_angle
         delta_dot = self.state.steering_rate
-        numerator = gear_gain * T_str - T_align - self.params.B_cq * delta_dot
+        numerator = float(T_str) * self.params.gear_ratio - T_align - self.params.B_cq * delta_dot
         delta_ddot = numerator / self.params.J_cq
 
         # 경계 체크 → 미분(속도/가속도) 투영 → 적분 순서로 처리
