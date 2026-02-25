@@ -360,31 +360,30 @@ class SuspensionModel:
         return float(delta_t)
 
     def _apply_stroke_limits(self, z_body_abs: float, delta_s: float, delta_s_dot: float, z_u_ddot: float) -> float:
-        """서스펜션 스트로크 한계 적용 (Steering 방식)
+        """Limit suspension stroke and suppress acceleration at travel limits.
 
-        한계에 도달하고 더 나가려는 경우 가속도와 속도를 0으로
+        When stroke reaches bump or rebound stops and still moving toward the stop,
+        wheel acceleration is clamped and velocity is zeroed.
 
         Args:
-            z_body_abs: 차체 절대 높이 [m]
-            delta_s: 현재 스트로크 [m]
-            delta_s_dot: 스트로크 속도 [m/s]
-            z_u_ddot: 휠 가속도 [m/s^2]
+            z_body_abs: Body absolute heave height [m]
+            delta_s: Current suspension stroke [m]
+            delta_s_dot: Stroke rate [m/s]
+            z_u_ddot: Candidate unsprung acceleration [m/s?]
 
         Returns:
-            수정된 z_u_ddot [m/s^2]
+            Limited vertical acceleration [m/s?]
         """
-        # Bump stop (과압축): delta_s < delta_s_min
         at_bump_and_compressing = (
             delta_s <= self.params.delta_s_min and
             delta_s_dot <= 0.0 and
-            z_u_ddot <= 0.0  # z_u가 아래로 가속 (압축)
+            z_u_ddot <= 0.0
         )
 
-        # Rebound stop (과신장): delta_s > delta_s_max
         at_rebound_and_extending = (
             delta_s >= self.params.delta_s_max and
             delta_s_dot >= 0.0 and
-            z_u_ddot >= 0.0  # z_u가 위로 가속 (신장)
+            z_u_ddot >= 0.0
         )
 
         if at_bump_and_compressing or at_rebound_and_extending:

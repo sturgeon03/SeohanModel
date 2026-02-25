@@ -1,7 +1,3 @@
-"""
-E-Corner configuration module
-"""
+"""E-Corner configuration package."""
 
-from .corner_config import CornerConfig, load_corner_config
-
-__all__ = ['CornerConfig', 'load_corner_config']
+__all__ = []

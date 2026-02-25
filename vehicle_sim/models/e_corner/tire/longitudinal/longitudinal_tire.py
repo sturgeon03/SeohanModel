@@ -30,13 +30,17 @@ class LongitudinalTireState:
 
 class LongitudinalTireModel:
     """
-    종방향 타이어 동역학 모델
-    입력: κ (slip ratio), F_z_tire (타이어 수직력)
-    출력: F_x_tire (종방향 타이어 힘)
+    Longitudinal tire model.
 
-    모델:
-    F_x_tire = C_x × F_z_tire × κ
-    단, |F_x_tire| ≤ μ × F_z_tire  (마찰 한계)
+    Inputs: slip ratio kappa and normal load F_z_tire
+    Output: longitudinal force F_x_tire
+
+    Formula:
+        F_x_tire = C_x * kappa
+        |F_x_tire| <= mu * F_z_tire
+
+    This implementation intentionally uses a simplified linear relation for kappa,
+    and applies normal-load-based saturation for physical consistency.
     """
 
     def __init__(self, config_path: Optional[str] = None):
@@ -97,31 +101,31 @@ class LongitudinalTireModel:
 
     def calculate_force(self, kappa: float, F_z_tire: float) -> float:
         """
-        종방향 타이어 힘 계산
+        Longitudinal tire force calculation.
 
-        입력:
-            - kappa: 슬립 비율 [-]
-            - F_z_tire: 타이어 수직력 [N]
+        Inputs:
+            - kappa: slip ratio [-]
+            - F_z_tire: normal load [N]
 
-        출력:
-            - F_x_tire: 종방향 타이어 힘 [N]
+        Outputs:
+            - F_x_tire: longitudinal tire force [N]
 
-        모델:
-            1. 선형 영역: F_x_tire = C_x × F_z_tire × κ
-            2. 마찰 한계: |F_x_tire| ≤ μ × F_z_tire
+        Formula:
+            1) Simplified model: F_x_tire = C_x * kappa
+            2) Friction limit: |F_x_tire| <= mu * F_z_tire
 
-        특징:
-            - 수직력에 비례하는 강성 (정규화된 C_x)
-            - F_z_tire가 클수록 더 큰 종방향 힘 발생
+        Notes:
+            - C_x is treated as an effective stiffness used in the simplified linear model.
+            - F_z_tire is only used for force saturation (friction cone).
         """
-        # 1. 수직력 비례 모델
+        # 1. Simplified linear tire relation
         F_x_tire = self.params.C_x * kappa
 
-        # 2. 마찰 한계 적용 (포화)
+        # 2. Friction-limited clipping
         F_x_tire_max = self.params.mu * abs(F_z_tire)
         F_x_tire = np.clip(F_x_tire, -F_x_tire_max, F_x_tire_max)
 
-        # 상태 업데이트
+        # update internal state
         self.state.longitudinal_force = F_x_tire
 
         return F_x_tire
