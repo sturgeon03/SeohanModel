@@ -95,7 +95,7 @@ class ECorner:
         self.steering = SteeringModel(config=steering_cfg, config_path=config_path, corner_id=corner_id)
 
         self.brake = BrakeModel(config_path=config_path)
-        self.drive = DriveModel(config_path=config_path, corner_id=corner_id)
+        self.drive = DriveModel(config_path=config_path)
         self.suspension = SuspensionModel(corner_id=corner_id, config_path=config_path)
         self.longitudinal_tire = LongitudinalTireModel(config_path=config_path)
         self.lateral_tire = LateralTireModel(config_path=config_path)
@@ -127,13 +127,7 @@ class ECorner:
         F_clamp = self.brake.update(dt, T_brk)
 
         # 3. Wheel Dynamics: T_Drv, F_clamp, F_x_tire(이전 스텝), direction → ω_wheel
-        omega_wheel = self.drive.update(
-            dt=dt,
-            T_Drv=T_Drv,
-            F_x=self.state.F_x_tire,
-            F_clamp=F_clamp,
-            direction=direction
-        )
+        omega_wheel = self.drive.update(dt, T_Drv, F_clamp, self.state.F_x_tire, direction)
 
         # 4. Suspension Dynamics: T_susp, X_body, z_road, z_road_dot → F_s, F_z
         F_s, F_z = self.suspension.update(dt, T_susp, X_body, z_road, z_road_dot)
@@ -156,7 +150,12 @@ class ECorner:
 
         # 6. Self-aligning torque 계산 및 조향 상태 업데이트
         M_align = self.lateral_tire.calculate_aligning_torque(alpha, F_z)
-        self.steering.state.self_aligning_torque = M_align
+        self.steering.state.self_aligning_torque = float(M_align)
+
+        # 타이어 상태 업데이트 (state는 update() 호출이 없으면 갱신되지 않음)
+        self.lateral_tire.state.slip_angle = float(alpha)
+        self.lateral_tire.state.lateral_force = float(F_y_tire)
+        self.lateral_tire.state.aligning_torque = float(M_align)
 
         # 상태 업데이트
         self.state.F_s = F_s
