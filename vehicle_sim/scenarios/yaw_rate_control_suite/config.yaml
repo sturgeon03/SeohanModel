@@ -1,0 +1,155 @@
+﻿# Yaw-rate study configuration
+
+sim:
+  dt: 0.001              # ?쒕??덉씠???쒓컙 媛꾧꺽 [s] | 異붿쿇: 0.001 (J ?앸퀎? 0.0005)
+  time: 30.0             # 珥??쒕??덉씠???쒓컙 [s] | 異붿쿇: 10.0
+  speed_mps: 10.0        # 紐⑺몴 ?띾룄 [m/s] | 異붿쿇: 10.0
+  seed: 1                # ?쒕뜡 ?쒕뱶 | 異붿쿇: 1
+  speed_mode: pid       # ?띾룄 ?좎? 諛⑹떇: lock(媛뺤젣 怨좎젙) or pid(?띾룄 ?쒖뼱湲? | 異붿쿇: lock
+  vehicle_config_path: null  # 李⑤웾 ?뚮씪誘명꽣 YAML 寃쎈줈 (null?대㈃ 湲곕낯 vehicle_standard.yaml) | 異붿쿇: null
+
+control:
+  mode: ff_fb_ls            # ?쒖뼱湲?紐⑤뱶: ff, ff_fb, ff_ls, ff_fb_ls | 異붿쿇: ff_ls
+  feedback:
+    yaw_rate: true         # ?붾젅?댄듃 ?쇰뱶諛??ъ슜 ?щ? | 異붿쿇: false
+    fy: true              # ???〓젰(Fy) ?쇰뱶諛??ъ슜 ?щ? | 異붿쿇: false
+    fy_source: estimate        # Fy ?쇰뱶諛??뚯뒪: true(?쒕??덉씠?? / estimate(ay 異붿젙移? | 異붿쿇: true
+    steering: true         # 議고뼢媛??쇰뱶諛??ъ슜 ?щ? | 異붿쿇: false
+  feedforward:
+    use_align_torque: true # FF???쇰씪?대떇 ?좏겕 蹂댁긽 ?ъ슜 ?щ? | 異붿쿇: true
+    max_accel: null        # 議고뼢 媛?띾룄 ?쒗븳 [rad/s^2] (null?대㈃ ?쒗븳 ?놁쓬) | 異붿쿇: null
+    torque_limit: null     # 議고뼢 ?좏겕 ?쒗븳 [N*m] (null?대㈃ ?쒗븳 ?놁쓬) | 異붿쿇: null
+    param_bias_enabled: false  # true硫?FF?먯꽌 ?곕뒗 B/C慣瑜?(1+param_bias_percent)濡??쒖옉(紐⑤뜽 mismatch 媛??
+    param_bias_percent: 0.10   # ?곷? 諛붿씠?댁뒪 (0.10 = +10%)
+
+randomization:
+  enabled: true            # ?뚮씪誘명꽣 ?쒕뜡???ъ슜 ?щ? | 異붿쿇: true
+  mode: gaussian             # ?쒕뜡??諛⑹떇: static(1?? or gaussian(?곗냽 ?쒕━?꾪듃) | 異붿쿇: gaussian
+  percent: 0.10            # B_cq, C_alpha 蹂??踰붿쐞 (?? 0.10 = 짹10%) | 異붿쿇: 0.10
+  per_wheel: false         # 諛뷀대퀎濡??낅┰ ?쒕뜡?뷀븷吏 ?щ? | 異붿쿇: false
+  randomize_b: true       # B_cq ?쒕뜡???ъ슜 ?щ? | 異붿쿇: true
+  randomize_c: true        # C_alpha ?쒕뜡???ъ슜 ?щ? | 異붿쿇: true
+  gaussian:
+    sigma_percent: 0.05   # 1? 蹂?붿쑉(?곷?媛?/sqrt(s) (?? 0.002 = 0.2%/sqrt(s)) | 異붿쿇: 0.005
+    update_every: 100        # ?낅뜲?댄듃 ?ㅽ뀦 媛꾧꺽 (1=留??ㅽ뀦) | 異붿쿇: 1
+    randomize_initial: false   # true硫?珥덇린 ?쒕뜡??ON, false硫?nominal?먯꽌 ?쒕━?꾪듃 ?쒖옉 | 異붿쿇: true
+
+estimator:
+  enabled: true            # 理쒖냼?먯듅/異붿젙湲??ъ슜 ?щ? | 異붿쿇: true
+  type: rls                # 異붿젙 諛⑹떇 (?꾩옱 rls留??ъ슜) | 異붿쿇: rls
+  c_alpha_source: estimate     # C_alpha 異붿젙 ?낅젰: true(?ㅼ젣媛? / estimate(異붿젙移? | 異붿쿇: true
+  b_align_source: estimate     # B_cq 異붿젙??align torque: true(紐⑤뜽) / estimate(異붿젙) / ignore(0) | 異붿쿇: true
+  # 怨듯넻(湲곕낯) RLS ?뚮씪誘명꽣: estimator.b / estimator.c_alpha媛 ?놁쑝硫???媛믪쓣 ?ъ슜
+  lambda: 0.999
+  p0: 3.5
+  min_samples: 4000
+  start_time: 3.0           # 怨듯넻 start time (媛쒕퀎 ?ㅼ젙: estimator.b.start_time / estimator.c_alpha.start_time)
+
+  # 遺꾨━ ?쒕떇(?좏깮): B??/ C慣?⑹쑝濡?貫, p0, min_samples, sample_decimation???곕줈 以????덉쓬
+  # (?ш린 媛믪쓣 梨꾩슦硫??꾩쓽 怨듯넻 媛믩낫???곗꽑 ?곸슜)
+  b:
+    start_time: 0.1
+    lambda: 0.9995
+    p0: 5.0
+    min_samples: 4000
+    sample_decimation: 1   # B ?꾩슜
+    
+  c_alpha:
+    start_time: 1.0
+    lambda: 0.99
+    p0: 50.0
+    min_samples: 10000
+    sample_decimation: 5   # C慣 ?꾩슜
+
+  dot_min_abs: 0.00001
+  alpha_min_abs: 0.0001
+  fz_min: 100.0
+  fy_saturation_margin: 0.05
+  angle_margin_rad: 0.02
+  rate_margin_rad_s: 0.2
+  clamp:
+    b_min: 1.0             # B_cq ?섑븳 | 異붿쿇: 1.0
+    b_max: 200.0           # B_cq ?곹븳 | 異붿쿇: 200.0
+    c_alpha_min: 20000.0   # C_alpha ?섑븳 [N/rad] | 異붿쿇: 20000.0
+    c_alpha_max: 200000.0  # C_alpha ?곹븳 [N/rad] | 異붿쿇: 200000.0
+
+
+
+
+
+
+
+
+
+lateral_force_estimator:
+  enabled: true            # ay 湲곕컲 Fy_total 異붿젙/?됯? ?ъ슜 ?щ? | 異붿쿇: true
+  ay_source: imu           # ay ?낅젰 ?뚯뒪: imu(?뱀젙?? / kinematic(?띾룄+?붾젅?댄듃) | 異붿쿇: imu
+  ay_bias: 0.0             # 痢≪젙 ay 諛붿씠?댁뒪 蹂댁젙 [m/s^2] | 異붿쿇: 0.0
+  lowpass_tau: null        # ay ???넻怨??꾪꽣 ?쒖젙??[s] (null?대㈃ 誘몄궗?? | 異붿쿇: 0.05
+  max_abs_ay: null         # ay ?대옩??[m/s^2] (null?대㈃ 誘몄궗?? | 異붿쿇: null
+
+# yaw_rate_cmd generators
+# - sine: ramped sine
+# - circle: constant yaw rate with smooth ramp
+# - step: step yaw rate (optional ramp)
+# - chirp: sine with time-varying frequency
+# - square: square wave (with smoothed edges)
+
+yaw_profile:
+  type: sine           # ?ъ슜???붾젅?댄듃 ?꾨줈?뚯씪: sine/circle/step/chirp/square | 異붿쿇: chirp
+  sine:
+    amp: 0.5             # 吏꾪룺 [rad/s] | 異붿쿇: 0.30
+    freq_hz: 0.1       # 二쇳뙆??[Hz] | 異붿쿇: 0.50
+    start_delay: 1.0      # ?쒖옉 吏??[s] | 異붿쿇: 1.0
+    ramp_time: 30.0        # ?⑦봽???쒓컙 [s] | 異붿쿇: 1.0
+  circle:
+    yaw_rate: 0.20        # ?쇱젙 ?붾젅?댄듃 [rad/s] | 異붿쿇: 0.20
+    start_delay: 1.0      # ?쒖옉 吏??[s] | 異붿쿇: 1.0
+    ramp_time: 50.0        # ?⑦봽???쒓컙 [s] | 異붿쿇: 1.0
+  step:
+    value: 0.5           # ?ㅽ뀦 ?ш린 [rad/s] | 異붿쿇: 0.25
+    start_time: 1.0       # ?ㅽ뀦 ?쒖옉 ?쒓컙 [s] | 異붿쿇: 1.0
+    ramp_time: 0.5        # ?ㅽ뀦 ?⑦봽 ?쒓컙 [s] | 異붿쿇: 0.5
+  square:
+    amp: 0.001             # 吏꾪룺 [rad/s] | 異붿쿇: 0.25
+    freq_hz: 0.10         # ?ㅼ쐞移?二쇳뙆??[Hz] | 異붿쿇: 0.50
+    start_delay: 1.0      # ?쒖옉 吏??[s] | 異붿쿇: 1.0
+    ramp_time: 5.0        # ?쒖옉 ?⑦봽???쒓컙 [s] | 異붿쿇: 1.0
+    transition_time: 0.10 # 媛??꾪솚(짹amp) 援ш컙??遺?쒕윭???꾩씠 ?쒓컙 [s] | 異붿쿇: 0.10
+    start_sign: 1         # ?쒖옉 遺??+1/-1) | 異붿쿇: 1
+  chirp:
+    amp: 0.01             # 吏꾪룺 [rad/s] | 異붿쿇: 0.25
+    f0_hz: 0.01           # ?쒖옉 二쇳뙆??[Hz] | 異붿쿇: 0.20
+    f1_hz: 0.05           # 醫낅즺 二쇳뙆??[Hz] | 異붿쿇: 1.50
+    t1: 8.0               # 二쇳뙆???ㅼ쐲 ?쒓컙 [s] | 異붿쿇: 8.0
+    start_delay: 1.0      # ?쒖옉 吏??[s] | 異붿쿇: 1.0
+    ramp_time: 2.0        # ?⑦봽???쒓컙 [s] | 異붿쿇: 1.0
+
+output:
+  plot: true              # ?뚮’ ?앹꽦 ?щ? | 異붿쿇: true
+  plot_mode: paper    # ?뚮’ 紐⑤뱶: paper(?쇰Ц??理쒖냼) / debug(?꾩껜) | 異붿쿇: paper
+  paper_wheel: FL         # paper 紐⑤뱶?먯꽌 ??쒕줈 ?쒖떆?????쇰꺼 | 異붿쿇: FL
+  style:
+    font_size: 14         # ?쇰Ц??湲???ш린 (?꾩껜) | 異붿쿇: 14
+    grid_alpha: 0.3       # 洹몃━???щ챸??0~1) | 異붿쿇: 0.3
+    # Color palette (Okabe-Ito, color-blind friendly)
+    input_color: "#6c757d"        # ?낅젰(ref/cmd) ???됱긽 (matplotlib ??吏??
+    input_alpha: 0.55     # ?낅젰(ref/cmd) ???щ챸??0~1) | 異붿쿇: 0.55
+    output_alpha: 0.9     # 異쒕젰(?ㅼ젣/異붿젙) ???щ챸??0~1) | 異붿쿇: 0.9
+    true_color: "#1f77b4"         # true/nominal ?쇱씤(?뚮옉)
+    paper_output_color: "#0072B2" # paper 紐⑤뱶 ?ㅼ젣 異쒕젰 ?쇱씤
+    estimate_color: "#ff7f0e"     # 異붿젙移??쇱씤(二쇳솴)
+    beta_color: "#0072B2"         # 棺 ?쇱씤(?ㅼ젣)
+    error_color: "#D55E00"        # error ?쇱씤
+    mode_tint: 0.35       # 紐⑤뱶 而щ윭瑜??좊퀎 ?됱긽???욌뒗 鍮꾩쑉(0~1) | 異붿쿇: 0.35
+    mode_colors:          # control.mode蹂?異쒕젰 ?쇱씤 湲곕낯 ?됱긽
+      "ff": "#1f77b4"
+      "ff_fb": "#2ca02c"
+      "ff_ls": "#ff7f0e"
+      "ff_fb_ls": "#d62728"
+  show_plots: true        # ?뚮’ ?붾㈃ ?쒖떆 ?щ? | 異붿쿇: true
+  save_npz: false         # 寃곌낵 npz ????щ? | 異붿쿇: false
+  save_json: true        # 硫뷀듃由?json ????щ? | 異붿쿇: false
+  save_dir: SeohanModel/vehicle_sim/scenarios/yaw_rate_control_suite/output  # ????대뜑 | 異붿쿇: SeohanModel/vehicle_sim/scenarios/yaw_rate_control_suite/output
+  tag: default            # ?뚯씪 ?대쫫 ?쒓렇 | 異붿쿇: default
+

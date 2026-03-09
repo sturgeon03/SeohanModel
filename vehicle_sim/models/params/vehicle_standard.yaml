@@ -1,0 +1,190 @@
+# Standard Vehicle Configuration
+# 차량 전체 파라미터 통합 설정 파일
+
+
+# ========================================
+# 차량 물리 사양 (Vehicle Specification)
+# ========================================
+vehicle_spec:
+  # 휠/타이어 사양 (drive_model, tire_model 공통 사용)
+  wheel:
+    R_eff: 0.321 #0.321  #0.277 #0.321    # 타이어 유효 반지름 [m] (205/55R16 기준)
+
+    # Ref: John et al., Acta Polytechnica Hungarica (2013), Table 2
+    #      (quarter-car ABS example params: r=0.3 m, J=1.6 kg·m², B=0.08 N·m·s/rad)  :contentReference[oaicite:1]{index=1}
+    # Note: 본 모델(e-corner 단일휠 등가)에서는 J_wheel/B_wheel 모두 코너별 설정 가능
+
+    # 휠 관성 모멘트 [kg·m²] // 유지하려는 성질
+    # Front: 휠 + 브레이크 디스크
+    # Rear: 휠 + 브레이크 디스크 + 모터 + 감속기 (등가 관성)
+    J_wheel_front: 1.781   # 전륜 관성 모멘트
+    J_wheel_rear: 1.781    # 후륜 관성 모멘트 (모터 포함 시 더 클 수 있음)
+
+    # 휠 점성 마찰 계수 [N·m·s/rad] (ω에 비례, 0이면 비활성) // 둔감
+    # Front: 자유회전 (제동만, 구동력 없음) → 베어링 마찰만
+    # Rear: 구동축 연결 (모터, 트랜스미션, 디퍼렌셜) → 더 큰 점성
+    B_wheel_front: 0.34     # 전륜 점성 계수 (free-rolling)
+    B_wheel_rear: 0.34     # 후륜 점성 계수 (drivetrain)
+
+
+
+  # 차량 기하 정보
+  geometry:
+    # CG 위치
+    x_CG: 2.635         # CG 절대 x 좌표 [m] (CarMaker Body.pos x)
+
+    # Wheel 접지점 절대 위치
+    x_wheel_front: 3.79  # 전륜 Wheel 접지점 절대 x 좌표 [m] (Wheel.fl.pos)
+    x_wheel_rear: 0.82   # 후륜 Wheel 접지점 절대 x 좌표 [m] (Wheel.rl.pos)
+
+    L_track: 1.634      # 트랙 폭 (좌우 바퀴 간격) [m]  # 좌/우 오프셋 0.817×2
+    L_wheelbase: 2.97   # 휠베이스 (전후 바퀴 간격) [m] # Wheel 접지점 기준 (3.79-0.82)
+
+    # 하중 분배 비율 (축별, 좌우 대칭 가정)
+    # a = x_CG - x_wheel_rear = 2.635 - 0.82 = 1.815 m (CG-후륜 거리)
+    # b = x_wheel_front - x_CG = 3.79 - 2.635 = 1.155 m (전륜-CG 거리)
+    # front_ratio = a / L_wheelbase = 1.815 / 2.97 = 0.611 (앞축 하중 비율)
+    # rear_ratio = b / L_wheelbase = 1.155 / 2.97 = 0.389 (뒷축 하중 비율)
+    
+    front_load_ratio: 0.611  # 앞축 하중 비율 (전체 스프렁 질량 대비) [-]
+    rear_load_ratio: 0.389   # 뒷축 하중 비율 (전체 스프렁 질량 대비) [-]
+
+
+    # 코너별 CG 기준 오프셋 (x: +앞 / -뒤, y: +좌 / -우)
+    # Wheel 접지점 기준 (Wheel.fl.pos, Wheel.rl.pos)
+    corner_offsets:
+      FL:
+        x: 1.155    # 3.79 - 2.635 (CG x)
+        y: 0.817
+      FR:
+        x: 1.155
+        y: -0.817
+      RL:
+        x: -1.815   # 0.82 - 2.635 (CG x)
+        y: 0.817
+      RR:
+        x: -1.815
+        y: -0.817
+
+
+# ========================================
+# 액추에이터 파라미터
+# ========================================
+
+
+# 브레이크 파라미터
+brake:
+  # 물리 기반 브레이크 모델 (클램핑력까지만 계산)
+  tau: 0.1        # 브레이크 시간 상수 (1차 지연) [s]
+
+  # Ref: Bellini et al., "Temperature Influence on Brake Pad Friction Coefficient Modelisation",
+  # Materials 2024, 17(1), 189. DOI:10.3390/ma17010189 (μ 평균 ~0.35–0.45 보고)
+  mu_pad: 0.35    # 패드-디스크 마찰계수 [-]
+
+  # Ref: Zhou et al., "Coordinated Control Strategy of Electro-Hydraulic Composite Braking Torque for the Distributed Electric Vehicles",
+  #      Machines 2022, 10(12):1235, DOI:10.3390/machines10121235 (T4: V_d, T6: R_rotor)
+  V_d: 1.0e-7     # [m^3/rev]  (T4: 0.1 cc/rev)
+  R_rotor: 0.12   # [m]        (T6: 120 mm)
+  A_eff: 0.0012566   # 캘리퍼 유효 단면적 [m^2]
+  p_max_bar: 200  # 시스템 최대 압력 [bar]
+
+
+
+# 드라이브 파라미터 (drive_model)
+drive:
+  max_wheel_speed: 60.63  # 최대 휠 각속도 [rad/s] (65.535 km/h)
+
+# 모터 파라미터
+motor:
+  # 모터 특성 (향후 추가 예정)
+  pass
+
+# 서스펜션 파라미터
+suspension:
+  # 기본 강성/댐핑
+  K_spring: 35000 #34425.0     # 스프링 강성 [N/m] (기본값, 축별 미지정 시 사용)
+
+  # 축별 스프링 강성 (선택)
+  K_spring_front: 22000 #54000 #22000 #54000   # 전륜 스프링 강성 [N/m]
+  K_spring_rear: 17000 #17000 #48000 --> foward test    # 후륜 스프링 강성 [N/m]
+
+  # 댐퍼 파라미터 (Front/Rear, Compression/Rebound 분리)
+  # Ref: CarMaker Suspension Damper Characteristics
+  damper_front:
+    compression: 1400.2   # 전륜 압축 감쇠 계수 (Push) [N*s/m]
+    rebound: 2800.2       # 전륜 리바운드 감쇠 계수 (Pull) [N*s/m]
+  damper_rear:
+    compression: 1100 #1528.0   # 후륜 압축 감쇠 계수 (Push) [N*s/m]
+    rebound: 3400 #3587.7       # 후륜 리바운드 감쇠 계수 (Pull) [N*s/m]
+
+  # 기구학적 파라미터 (물리적 설계값, K_spring과 독립)
+  z_CG0: 0.654        # 평형 시 CG 절대 높이 [m] (CarMaker Body.pos z)
+
+  # 스트로크 한계 (위치 제한 방식 - 힘이 아닌 상태 clamp)
+  delta_s_min: -5.20    # 최대 압축 한계 [m]
+  delta_s_max: 5.20     # 최대 신장 한계 [m]  
+
+  # 액티브 서스펜션 (볼 스크류)
+  lead: 0.01            # 리드 (1회전당 이동 거리) [m/rev]
+  efficiency: 0.9       # 기계적 효율 [-]
+  F_active_max: 8000.0  # 액티브 힘 포화 한계 [N] (None이면 무제한)
+
+# 스티어링 파라미터
+steering:
+  # Parameter order inspired by:
+  # A. Marouf et al., "A New Control Strategy of an Electric-Power-Assisted Steering System",
+  # IEEE Trans. Veh. Technol., 61(8):3574-3589, 2012.
+  # Values are tuned but kept in a similar range to the EPAS steering column model.
+
+  J_cq: 0.0738         # equivalent inertia [kg*m^2]
+  B_cq: 85.61          # viscous damping [N*m*s/rad]
+  gear_ratio: 118.0    # motor shaft to steering shaft ratio [-]
+  max_rate: 6283.185    # max steering rate [rad/s] (3600 deg/s)
+  # Left/right wheel asymmetry limits (CCW+, CW-)
+  left:
+    max_angle_pos: 1.047198   # +60 deg
+    max_angle_neg: -1.710422  # -98 deg
+  right:
+    max_angle_pos: 1.7104220   # +98 deg
+    max_angle_neg: -1.047198  # -60 deg
+tire:
+  # 공통 마찰 계수 (횡/종방향 공용)
+  mu: 1.0           # 마찰 계수 (건조 노면) [-]
+
+  # 종방향 타이어 (longitudinal)
+  longitudinal:
+    C_x: 231500        # 종방향 타이어 강성 계수 (정규화) [-]
+    v_min: 0.1        # 최소 속도 (슬립 계산용) [m/s]
+
+  # 횡방향 타이어 (lateral)
+  lateral:
+    C_alpha: 115000 #22.0   # 횡방향 코너링 강성 [N/rad] --> 레퍼런스. C_f, C_l
+    trail: 0.02635 #0.025        # 트레일 길이 [m] (얼라이닝 토크 계산용)
+
+  # 타이어 수직 동역학 (vertical)
+  vertical:
+    K_t: 349500.0      # 타이어 수직 강성 [N/m]
+    C_t: 708.6         # 타이어 수직 댐핑 [N*s/m]
+    delta_t_max: 1.115  # 타이어 최대 압축 한계 [m]
+    K_hard: 40000000.0  # 바닥친 구간 강성 [N/m] (penalty force)
+
+# 언스프렁 질량 파라미터
+unsprung:
+  m_u_front: 74.120 #69.12     # 전륜 언스프렁 질량 [kg] (FL, FR)
+  m_u_rear: 54.995 #55      # 후륜 언스프렁 질량 [kg] (RL, RR)
+
+# 물리 상수
+physics:
+  g: 9.81              # 중력가속도 [m/s²]
+
+# 차체 파라미터 (Sprung Mass)
+vehicle_body:
+  # 질량 특성
+  m: 1806.8     #1806.8 = 서스펜션 안정        # 스프렁 질량 (차체) [kg]
+
+  # 관성 모멘트 (CG 기준)
+  inertia:
+    Ixx: 749.84           # 롤 관성 모멘트 [kg·m²]
+    Iyy: 2732.2          # 피치 관성 모멘트 [kg·m²]
+    Izz: 2900.3 #3638 #2900.3          # 요 관성 모멘트 [kg·m²]
+    Ixz: 0.0             # 교차 관성 적 (xz 평면) [kg·m²]
